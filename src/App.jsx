@@ -13,6 +13,51 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [cityInput, setCityInput] = useState("Warszawa");
+  const [citiesToCompare, setCitiesToCompare] = useState([]);
+  const [comparisonData, setComparisonData] = useState([]);
+  const [mode, setMode] = useState(`single`);
+  const [comparisonInput, setComparisonInput] = useState("");
+
+  const fetchComparisonWeather = async () => {
+  setLoading(true);
+  try {
+   
+    const requests = citiesToCompare.map(city =>
+      fetch(`${BASE_URL}?q=${city}&appid=${API_KEY}&units=metric&lang=pl`)
+        .then(res => res.json()) 
+    );
+
+    const results = await Promise.all(requests);
+
+    setComparisonData(results);
+  } catch (error) {
+    setError("Coś poszło nie tak przy pobieraniu wielu miast");
+  } finally {
+    setLoading(false);
+  }
+  };
+
+
+  const handleComparisonInput = (e) => {
+    setComparisonInput(e.target.value);
+  }
+
+  const handleAddCity = (e) => {
+    e.preventDefault();
+    const newCity = comparisonInput.trim();
+  
+
+  if (newCity && !citiesToCompare.includes(newCity) && citiesToCompare.length < 3){
+    setCitiesToCompare([...citiesToCompare, newCity]);
+    setComparisonInput("");
+  }
+
+}
+  const handleRemoveCity = (cityToRemove) => {
+    setCitiesToCompare(citiesToCompare.filter(city => city !== cityToRemove));
+  };
+
+
 
   const fetchWeather = async (cityName) => {
     if (!cityName) return;
@@ -55,20 +100,19 @@ function App() {
     fetchWeather(city);
   }, []);
 
-//aktualizacja stanu cityinput przy każdej wpisanej wartości
+
   const handleInputChange = (e) => {
     setCityInput(e.target.value);
   };
 
-  //obsługa wysyłania formularza 
+
   const handleSubmit = (e) => {
-    e.preventDefault(); //zapobiega przeładowaniu ustrony
+    e.preventDefault(); 
     if (cityInput.trim() !== '') {
       fetchWeather(cityInput.trim());
     }
   };
 
-//renderowanie warunkowe panelu z pogodą 
   const renderWeatherPanel = () => {
     if (loading) {
       return <p className='loading'> ładowanie danych........</p>
@@ -79,7 +123,6 @@ function App() {
     }
 
     if(weatherData) {
-            //wyciągnięcie danych z obiektu
             const {main, weather, name, sys} = weatherData;
             const temperature = Math.round(main.temp);
             const description = weather[0].description;
@@ -103,31 +146,116 @@ function App() {
 
 
 
-  return (
-    <>
-     <div className='App'>
-        <h1>Aktualna Pogoda</h1>
+return (
+  <>
+    <div className='App'>
+      <h1>Aktualna Pogoda</h1>
 
-        <form onSubmit={handleSubmit} className="form">
-          <input 
-          type="text"
-          value={cityInput}
-          onChange={handleInputChange}
-          placeholder='wpisz nazwe miasta'
-          
-          />
+      <div className="mode-switcher" style={{ marginBottom: '20px' }}>
+        <button onClick={() => setMode('single')} disabled={mode === 'single'}>
+          Pojedyncze miasto
+        </button>
+        <button onClick={() => setMode('compare')} disabled={mode === 'compare'}>
+          Porównaj miasta
+        </button>
+      </div>
 
-          <button type='submit' disabled={loading}>
-        
-          </button>
-        </form>
+      {mode === 'single' && (
+        <>
+          <form onSubmit={handleSubmit} className="form">
+            <input
+              type="text"
+              value={cityInput}
+              onChange={handleInputChange}
+              placeholder='wpisz nazwe miasta'
+            />
+            <button type='submit' disabled={loading}>
+              Pobierz
+            </button>
+          </form>
 
           <div className='weather-panel'>
-              {renderWeatherPanel()}
+            {renderWeatherPanel()}
           </div>
-     </div>
-    </>
-  );
+        </>
+      )}
+
+      {mode === 'compare' && (
+        <div className="comparison-mode">
+
+          <form onSubmit={handleAddCity} className="form">
+            <input
+              type="text"
+              value={comparisonInput}
+              onChange={handleComparisonInput}
+              placeholder='Dodaj miasto (max 3)'
+              disabled={loading || citiesToCompare.length >= 3}
+            />
+            <button
+              type='submit'
+              disabled={loading || citiesToCompare.length >= 3 || comparisonInput.trim() === ''}
+            >
+              Dodaj
+            </button>
+          </form>
+
+          <div className="city-tags" style={{ display: 'flex', gap: '10px', justifyContent: 'center', margin: '15px 0' }}>
+            {citiesToCompare.length === 0 && <p>Brak dodanych miast</p>}
+            {citiesToCompare.map((city, index) => (
+              <span key={index} style={{ background: '#525252ff', padding: '5px 10px', borderRadius: '15px' }}>
+                {city}
+                <button onClick={() => handleRemoveCity(city)} style={{ marginLeft: '5px', border: 'none', background: 'transparent', cursor: 'pointer', color: 'red', fontWeight: 'bold' }}>
+                  X
+                </button>
+              </span>
+            ))}
+          </div>
+
+          <button
+            onClick={fetchComparisonWeather}
+            disabled={loading || citiesToCompare.length < 2}
+            style={{ padding: '10px 20px', fontSize: '16px', margin: '10px 0 30px', cursor: 'pointer' }}
+          >
+            PORÓWNAJ TERAZ
+          </button>
+
+          <div className='weather-panel'>
+            {loading && <p className='loading'>Ładowanie danych...</p>}
+            {error && <p className="error">Błąd: {error}</p>}
+
+            {comparisonData.length > 0 && (
+              <div className="comparison-cards" style={{ display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap' }}>
+                {comparisonData.map((data, index) => {
+                  const { main, weather, name, sys } = data;
+                  return (
+                    <div key={index} className="weather-panel-content" style={{ flex: '0 1 250px', border: '1px solid #ccc', borderRadius: '8px', margin: '0' }}>
+                      <h2>{name}, {sys.country}</h2>
+                      <div className="weather-details">
+                        <img src={`http://openweathermap.org/img/wn/${weather[0].icon}@2x.png`} alt={weather[0].description} className="weather-icon" />
+                        <p className="temperature">{Math.round(main.temp)}°C</p>
+                        <p className="description">{weather[0].description}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {comparisonData.length > 0 && (
+              <div className="temp-differences" style={{ marginTop: '30px', background: '#4b4949ff', padding: '15px', borderRadius: '8px', textAlign: 'left' }}>
+                <h3>Podsumowanie:</h3>
+                <p>Najcieplej: <strong>{Math.max(...comparisonData.map(d => d.main.temp)).toFixed(1)}°C</strong></p>
+                <p>Najzimniej: <strong>{Math.min(...comparisonData.map(d => d.main.temp)).toFixed(1)}°C</strong></p>
+                <p>Różnica: <strong>{(Math.max(...comparisonData.map(d => d.main.temp)) - Math.min(...comparisonData.map(d => d.main.temp))).toFixed(1)}°C</strong></p>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+    </div>
+  </>
+);
 }
 
 export default App
